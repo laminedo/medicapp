@@ -57,6 +57,8 @@
 .login-main { display: grid; place-items: center; padding: var(--s-6) var(--gutter); }
 .login-panel { display: grid; gap: var(--s-4); width: min(380px, 100%); }
 .login-panel h1 { font-size: var(--t-large); font-weight: 700; letter-spacing: var(--track-large); line-height: var(--leading-tight); }
+.login-help { text-align: center; }
+.link--button { padding: var(--s-2); border: 0; background: none; cursor: pointer; }
 .login-lede { margin: calc(var(--s-2) * -1) 0 var(--s-2); color: var(--ink-soft); }
 
 @media (max-width: 860px) {
