@@ -12,6 +12,7 @@
     "dev": "node --watch server/index.js",
     "reset": "node server/seed.js --reset",
     "mobile": "npm --prefix mobile start",
-    "publish:pages": "git subtree push --prefix public origin gh-pages"
+    "publish:pages": "git subtree push --prefix public origin gh-pages",
+    "recover": "node server/recover.js"
   }
 }

@@ -144,6 +144,17 @@ The published version runs in **production mode**: no sample data and no demo ac
 3. In **Settings**, press **Use my current location** while you are at the building, check the **time zone**, and save. Staff cannot clock in until the location is set.
 4. Add your staff in **Staff**, and your residents in **Patients**.
 
+### A locked-out admin
+
+Staff who forget a password ask an admin, who sets a new one from **Staff**. An admin can be rescued the same way by another admin, so keep a second admin account.
+
+If the only admin is locked out, whoever controls the database creates a one-time recovery code, valid for one hour:
+
+- **Published version:** in the Supabase dashboard, open **SQL Editor** for the `medicapp` project and run `select medicapp_new_recovery_code();`
+- **On your own computer:** run `npm run recover`
+
+Then, on the sign-in screen, choose **Forgot password?** and enter the admin username, the code and a new password.
+
 ### Releasing changes
 
 - **Pages** (anything in `public/`): commit, then run `npm run publish:pages`. GitHub Pages updates within a minute or two.

@@ -1,4 +1,6 @@
-import { get, run } from '../db.js';
+import { Buffer } from 'node:buffer';
+import { timingSafeEqual } from 'node:crypto';
+import { get, now, run, tx } from '../db.js';
 import { HttpError, text } from '../router.js';
 import {
   MIN_PASSWORD_LENGTH,
@@ -10,6 +12,7 @@ import {
   loginAllowed,
   publicUser,
   recordLoginFailure,
+  sha256,
   startSession,
   verifyPassword,
 } from '../auth.js';
@@ -41,6 +44,39 @@ export default function authRoutes(router) {
   router.get('/api/auth/me', { role: 'public' }, async ({ user }) => {
     const facility = await get('SELECT name FROM facility WHERE id = 1');
     return { user: user ? publicUser(user) : null, facility_name: facility?.name ?? 'MedicApp', setup: await setupState() };
+  });
+
+  // For an admin who is locked out. The recovery code is created by whoever
+  // controls the database (see README: "A locked-out admin"), is valid for an
+  // hour, and works once. Staff do not use this: an admin resets them.
+  router.post('/api/auth/recover', { role: 'public' }, async ({ request, body }) => {
+    const username = text(body.username, 'Username', { max: 64 }).toLowerCase();
+    const code = text(body.recovery_code, 'Recovery code', { max: 100 });
+    const next = text(body.new_password, 'New password', { max: 200 });
+    if (next.length < MIN_PASSWORD_LENGTH) {
+      throw new HttpError(400, `New password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+    }
+    const key = `${request.ip}|recover`;
+    if (!(await loginAllowed(key))) throw new HttpError(429, 'Too many attempts. Wait a few minutes and try again.');
+
+    const stored = await get("SELECT value FROM app_settings WHERE key = 'recovery_code_hash'");
+    const expires = await get("SELECT value FROM app_settings WHERE key = 'recovery_code_expires'");
+    const live = stored && expires && expires.value > now();
+    const matches = live && timingSafeEqual(Buffer.from(sha256(code)), Buffer.from(stored.value));
+    const user = matches ? await get("SELECT id FROM users WHERE username = ? AND active = 1 AND role = 'admin'", username) : null;
+    if (!user) {
+      await recordLoginFailure(key);
+      // One message for every failure, so it reveals nothing about which part was wrong.
+      throw new HttpError(403, 'That did not work. Check the admin username, and that the recovery code is new: it lasts one hour and works once.');
+    }
+
+    await tx(async () => {
+      await run('UPDATE users SET password_hash = ? WHERE id = ?', hashPassword(next), user.id);
+      await run("DELETE FROM app_settings WHERE key IN ('recovery_code_hash', 'recovery_code_expires')");
+    });
+    await destroyUserSessions(user.id);
+    await clearLoginFailures(key);
+    return { ok: true };
   });
 
   router.post('/api/auth/password', async ({ request, user, body }) => {
