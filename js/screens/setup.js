@@ -12,7 +12,7 @@ const BLOCKED = {
   ],
   code: [
     'Set a setup code before setting up',
-    'So that a stranger cannot claim the admin account, add a variable named MEDICAPP_SETUP_CODE to this server with a phrase only you know. Then reload this page and enter it here.',
+    'So that a stranger cannot claim the admin account, this server needs a setup code before the first account can be created. The person who installed it sets one: see "Publish it" in the README.',
   ],
 };
 
@@ -56,6 +56,8 @@ export function render({ setup, onDone }) {
           job_title: jobTitle.value,
           username: username.value,
           password: password.value,
+          // Almost always the care home's own zone. It can be changed in Settings.
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
         onDone(user, facilityName.value.trim());
       } catch (err) {
@@ -70,7 +72,7 @@ export function render({ setup, onDone }) {
     h(
       'form',
       { class: 'form', onSubmit, novalidate: true },
-      setup.code_required && field('Setup code', code, { hint: 'The MEDICAPP_SETUP_CODE you set on the server.' }),
+      setup.code_required && field('Setup code', code, { hint: 'The one-time code that came with this installation.' }),
       field('Care home name', facilityName),
       field('Your name', name),
       field('Your job title', jobTitle, { optional: true }),

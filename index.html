@@ -3,19 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- The Node server sends a stricter policy as a header. This one also covers
+       GitHub Pages, which cannot send headers, and allows the Supabase API. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <meta name="referrer" content="same-origin">
   <meta name="theme-color" content="#F2F1EA" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0E1512" media="(prefers-color-scheme: dark)">
   <title>MedicApp</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/css/tokens.css">
-  <link rel="stylesheet" href="/css/base.css">
-  <link rel="stylesheet" href="/css/components.css">
-  <link rel="stylesheet" href="/css/screens.css">
+  <!-- Paths are relative so the app works from a sub-folder (GitHub Pages). -->
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/screens.css">
 </head>
 <body>
   <div id="app">
     <noscript><p class="noscript">MedicApp needs JavaScript turned on to run.</p></noscript>
   </div>
-  <script type="module" src="/js/app.js"></script>
+  <script src="config.js"></script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>

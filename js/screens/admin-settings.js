@@ -2,7 +2,7 @@ import { api } from '../api.js';
 import { h } from '../dom.js';
 import { getPosition } from '../geo.js';
 import { fmtDistance, fmtMinutes } from '../format.js';
-import { button, callout, dataView, field, formError, input, pageHead, section, toast, withBusy } from '../ui.js';
+import { button, callout, dataView, field, formError, input, pageHead, section, select, toast, withBusy } from '../ui.js';
 import { geofenceRing, positionCaption } from '../ring.js';
 
 const MIN_RADIUS = 10;
@@ -20,6 +20,9 @@ export function mount(root, ctx) {
     const longitude = input({ value: facility.longitude, inputmode: 'decimal', required: true, class: 'input nums' });
     const radius = input({ type: 'number', value: facility.radius_m, min: MIN_RADIUS, max: MAX_RADIUS, step: 5, required: true, class: 'input nums' });
     const slider = h('input', { type: 'range', class: 'range', min: MIN_RADIUS, max: SLIDER_MAX, step: 5, value: Math.min(facility.radius_m, SLIDER_MAX), 'aria-label': 'Radius' });
+    // Every zone the browser knows, plus the saved one in case it is not listed.
+    const zones = [...new Set([facility.timezone, ...(Intl.supportedValuesOf?.('timeZone') ?? [])])].sort();
+    const timezone = select({}, zones.map((zone) => ({ value: zone, label: zone.replaceAll('_', ' ') })), facility.timezone);
     const error = formError();
     const located = h('div');
     const preview = h('div', { class: 'geofence-preview' });
@@ -82,7 +85,7 @@ export function mount(root, ctx) {
       if (!draft()) return error.show('Check the latitude, longitude and radius. Radius must be between 10 m and 5 km.');
       await withBusy(save, async () => {
         try {
-          const res = await api.put('/api/facility', { name: name.value, address: address.value, latitude: latitude.value, longitude: longitude.value, radius_m: radius.value });
+          const res = await api.put('/api/facility', { name: name.value, address: address.value, latitude: latitude.value, longitude: longitude.value, radius_m: radius.value, timezone: timezone.value });
           ctx.setFacilityName(res.facility.name);
           toast('Settings saved');
         } catch (err) {
@@ -97,7 +100,17 @@ export function mount(root, ctx) {
       h(
         'form',
         { class: 'settings', onSubmit, novalidate: true },
-        section('Facility', null, h('div', { class: 'panel form' }, field('Name', name), field('Address', address, { optional: true }))),
+        section(
+          'Facility',
+          null,
+          h(
+            'div',
+            { class: 'panel form' },
+            field('Name', name),
+            field('Address', address, { optional: true }),
+            field('Time zone', timezone, { hint: 'Medication times and "today" follow this zone, wherever the server runs.' }),
+          ),
+        ),
         section(
           'Clock-in zone',
           null,

@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { h } from '../dom.js';
-import { dateFromLocal, fmtDay, fmtTime, localDate, shiftDate } from '../format.js';
+import { dateFromLocal, fmtDay, fmtTime, shiftDate } from '../format.js';
 import { badge, button, dataView, empty, field, formError, group, input, openSheet, pageHead, roundMeter, section, segmented, textarea, toast, withBusy } from '../ui.js';
 import { taskRow } from './staff-meds.js';
 
@@ -41,11 +41,11 @@ function prnRecordRow(record, onVoid) {
 }
 
 export function mount(root) {
-  const state = { date: localDate(), filter: 'all' };
-  const view = dataView(root, { load: () => api.get(`/api/tasks?date=${state.date}`), render: draw });
+  const state = { date: null, filter: 'all' };
+  const view = dataView(root, { load: () => api.get(state.date ? `/api/tasks?date=${state.date}` : '/api/tasks'), render: draw });
   const reload = () => view.refresh({ quiet: true });
   const timer = setInterval(() => {
-    if (!document.hidden && !document.querySelector('dialog[open]') && state.date === localDate()) reload();
+    if (!document.hidden && !document.querySelector('dialog[open]') && state.onToday) reload();
   }, REFRESH_MS);
 
   function go(date) {
@@ -93,6 +93,8 @@ export function mount(root) {
   }
 
   function draw({ tasks, counts, today, date, prn_records: prnRecords }) {
+    state.date = date;
+    state.onToday = date === today;
     const picker = input({ type: 'date', value: date, max: shiftDate(today, 30), 'aria-label': 'Report date', onChange: (e) => go(e.target.value) });
     picker.classList.add('input--date');
     const toolbar = h(
