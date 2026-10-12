@@ -7,6 +7,8 @@ There are two parts:
 - **The web app and server** (this folder): a single-page app with a small Node backend and a SQLite database. There is nothing to install: it uses only what ships with Node.
 - **A native phone app** for staff, built with Expo, in [`mobile/`](mobile/README.md). It talks to the same server.
 
+It is published at **https://laminedo.github.io/medicapp/** (see [The published version](#the-published-version)). Everything below up to that section is about running it on your own computer.
+
 ## Run it
 
 Needs Node 22.13 or newer (built and tested on Node 24).
@@ -80,30 +82,40 @@ Use a normal browser window (Chrome, Safari, Edge) for this. Embedded preview pa
 
 ```
 server/
-  index.js        HTTP server, static files, security headers
+  app.js          the whole API as one router, shared by every way of running it
+  index.js        running it under Node: http server, static files, SQLite
   router.js       routing, JSON bodies, role guards, validation helpers
-  db.js           SQLite connection and schema, as ordered migrations
+  config.js       how this copy is being run (production, demo data, setup code)
+  db.js           the database as the server sees it (engine-neutral, async)
+  db-sqlite.js    the SQLite engine and its migrations
   seed.js         sample data and the demo accounts
   auth.js         password hashing (scrypt), sessions, sign-in throttling
+  time.js         the facility's time zone: local dates and times of day
   geo.js          distance between two coordinates
   schedule.js     builds a day's medication tasks, statuses and PRN limits
   shifts.js       pairs clock-ins with clock-outs into worked shifts
-  routes/         auth, users, facility, clock, patients, tasks, messages, dashboard, reports
+  routes/         auth, setup, users, facility, clock, patients, tasks, messages, dashboard, reports
+supabase/
+  functions/api/  the Edge Function entry point and the Postgres engine
+  migrations/     the Postgres schema
 public/
   index.html
+  config.js           where the server is (same address, or Supabase on GitHub Pages)
   css/tokens.css      the theme: every colour, size, radius, shadow and duration
   css/base.css        reset and base type
   css/components.css  buttons, lists, forms, sheets, badges, the app shell
   css/screens.css     layout specific to one screen
   js/app.js           sign-in state, shell, routing
+  js/api.js           talks to the server (cookie or token, depending on hosting)
   js/ui.js            the shared component kit
   js/ring.js          the geofence drawing
   js/clock.js         how clock events read, and the admin clock-out sheet
   js/screens/         one file per screen
 mobile/               the native phone app (Expo). See mobile/README.md
+Dockerfile            for hosts that run the Node server with a disk
 ```
 
-The database upgrades itself. Schema changes are ordered migrations in `server/db.js`, so starting a newer version of the server against an older database keeps the data.
+The SQLite database upgrades itself. Schema changes are ordered migrations in `server/db-sqlite.js`, so starting a newer version of the server against an older database keeps the data.
 
 ## Design
 
@@ -114,22 +126,40 @@ The interface follows two references:
 
 To rebrand, change the six colour roles at the top of `public/css/tokens.css`. Light and dark themes follow the device setting.
 
-## Publish it (Railway)
+## The published version
 
-The repository includes a `Dockerfile`, so a host can build and run it with no extra configuration. Published this way the app runs in **production mode**: it does not load the sample data or the demo accounts, and the first person to open it creates the admin account through a one-time setup screen.
+The app is published in two parts:
 
-On [Railway](https://railway.com):
+| Part | Where | Address |
+|---|---|---|
+| The pages (what you see) | GitHub Pages, from this repository's `gh-pages` branch | https://laminedo.github.io/medicapp/ |
+| The server and database | Supabase project `medicapp`: one Edge Function (`api`) on Postgres | `https://aghnfdzewevmbznfmxja.supabase.co/functions/v1/api` |
 
-1. **New Project → Deploy from GitHub repo**, and choose this repository. Railway finds the `Dockerfile` by itself.
-2. **Add a volume** so the database survives deploys: press `⌘K` (or right-click the canvas), choose **Volume**, attach it to the service, and set the mount path to `/data`.
-3. **Add a variable** on the service: `MEDICAPP_SETUP_CODE`, set to a phrase only you know.
-4. **Get the link**: service **Settings → Networking → Public Networking → Generate Domain**. HTTPS is automatic.
-5. Open the link. Enter the setup code, name your care home, and create your admin account.
-6. In **Settings**, press **Use my current location** while you are at the building, then save. Staff cannot clock in until this is done.
+The published version runs in **production mode**: no sample data and no demo accounts. The first visit shows a one-time setup screen that creates the admin account.
 
-Setup refuses to run until steps 2 and 3 are done, and says which one is missing. After the first admin exists, the setup screen never appears again.
+### First visit
 
-To use the phone app with the published server, set `EXPO_PUBLIC_API_URL` to the Railway link (see [`mobile/README.md`](mobile/README.md)).
+1. Open https://laminedo.github.io/medicapp/.
+2. Enter the **setup code** from `setup-code.local.txt` (kept on the computer the app was installed from, never uploaded), name your care home, and create your admin account. The code stops working once that account exists.
+3. In **Settings**, press **Use my current location** while you are at the building, check the **time zone**, and save. Staff cannot clock in until the location is set.
+4. Add your staff in **Staff**, and your residents in **Patients**.
+
+### Releasing changes
+
+- **Pages** (anything in `public/`): commit, then run `npm run publish:pages`. GitHub Pages updates within a minute or two.
+- **Server** (anything in `server/`): the Supabase function loads the server code from this repository at one exact commit. Push the change, put the new commit id in the five import addresses at the top of `supabase/functions/api/index.ts`, and deploy that function again (`supabase functions deploy api --no-verify-jwt`, or from the Supabase dashboard).
+- **Database**: the tables are created by `supabase/migrations/0001_schema.sql`. Add a new numbered file for any change and apply it to the Supabase project.
+
+### Good to know
+
+- **The repository is public**, because free GitHub Pages requires it. It contains code only. The demo passwords further up work on the sample data on your own machine, not on the published app.
+- **Free Supabase projects pause after about a week with no use.** Open the Supabase dashboard and press Restore to wake it. A paid plan does not pause.
+- **Signing in** on the published site keeps you signed in on that device for 12 hours. Use Sign out on shared computers.
+- **The tables are not reachable through Supabase's public API.** Row level security is on with no policies, so only the `api` function can read or write them. Supabase's security checker lists this as an informational note for each table; that is the intended setup.
+
+### Other ways to host it
+
+The same server also runs under plain Node with a built-in SQLite database, which is how it runs on your own machine. The repository includes a `Dockerfile` for hosts that keep a disk (Railway, Fly.io, a VPS): mount a volume, set `MEDICAPP_SETUP_CODE`, and the server serves the pages itself, so GitHub Pages and Supabase are not needed.
 
 ## Settings
 
@@ -141,6 +171,9 @@ To use the phone app with the published server, set `EXPO_PUBLIC_API_URL` to the
 | `NODE_ENV` | (unset) | `production` turns off the sample data and requires a setup code and a persistent disk. The Dockerfile sets it. |
 | `MEDICAPP_SETUP_CODE` | (unset) | The phrase needed to create the first admin account. Required in production. |
 | `MEDICAPP_DEMO` | (automatic) | `1` forces the sample data on, `0` forces it off. |
+| `MEDICAPP_ALLOWED_ORIGINS` | (none) | Other web addresses allowed to call this server from a browser, comma-separated. Only needed if the pages are hosted somewhere else. |
+
+These apply when the server runs under Node. The Supabase function sets its own values in `supabase/functions/api/index.ts`.
 
 To run the phone app, see [`mobile/README.md`](mobile/README.md).
 
@@ -154,8 +187,8 @@ npm run reset
 
 This is a working prototype, not a certified medical records system. At minimum:
 
-- **Serve it over HTTPS.** Phones only share location with secure sites, so clock-in will not work over plain `http://` on a local network. Put it behind a reverse proxy with a certificate, or host it.
+- **Use the HTTPS address.** Phones only share location with secure sites. The published version is HTTPS already; a copy on plain `http://` on a local network cannot clock anyone in.
 - **Never publish the demo accounts.** Their passwords are in this file. Production mode leaves them out; give every person their own sign-in.
 - **Know the limits of browser location.** It can be spoofed by a determined person, and indoor accuracy varies. Treat the clock log as a strong signal, not proof.
-- **Back up `data/`.** It is a single SQLite file.
+- **Back up the data.** On your own machine it is one SQLite file in `data/`. On Supabase, free projects have no automatic backups: export the database from the dashboard, or move to a paid plan.
 - **Check your obligations.** Resident health information is regulated (HIPAA in the US, GDPR in Europe). That covers hosting, access logging, retention and more than this prototype provides.

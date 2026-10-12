@@ -39,11 +39,14 @@ The app reads the server address from `EXPO_PUBLIC_API_URL`. Copy `.env.example`
 
 | Where the app runs | Address to use |
 |---|---|
+| Anywhere, against the published server | `https://aghnfdzewevmbznfmxja.supabase.co/functions/v1` |
 | iOS simulator | `http://localhost:3000` (the default) |
 | Android emulator | `http://10.0.2.2:3000` (the default on Android) |
 | A real phone | Your computer's address on the same Wi-Fi, for example `http://192.168.1.20:3000` |
 
-For a real phone, also start the server so other devices can reach it:
+The published server is the simplest choice for a real phone: it is HTTPS and reachable from anywhere, with the accounts you created on the web.
+
+To use a real phone against the copy on your computer instead, also start the server so other devices can reach it:
 
 ```bash
 HOST=0.0.0.0 npm start
