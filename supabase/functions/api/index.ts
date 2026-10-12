@@ -4,11 +4,11 @@
 // GitHub repository at one exact commit, so what runs is precisely what that
 // commit contains. To release a server change: push it, put the new commit's
 // id in the five addresses below, and deploy this function again.
-import { createApp } from 'https://raw.githubusercontent.com/laminedo/medicapp/5e0d1676390bcc6c7145747e6cf9c7864704e887/server/app.js';
-import { configure } from 'https://raw.githubusercontent.com/laminedo/medicapp/5e0d1676390bcc6c7145747e6cf9c7864704e887/server/config.js';
-import { useDatabase } from 'https://raw.githubusercontent.com/laminedo/medicapp/5e0d1676390bcc6c7145747e6cf9c7864704e887/server/db.js';
-import { MAX_BODY_BYTES } from 'https://raw.githubusercontent.com/laminedo/medicapp/5e0d1676390bcc6c7145747e6cf9c7864704e887/server/router.js';
-import { postgresEngine } from 'https://raw.githubusercontent.com/laminedo/medicapp/5e0d1676390bcc6c7145747e6cf9c7864704e887/supabase/functions/api/db-postgres.js';
+import { createApp } from 'https://raw.githubusercontent.com/laminedo/medicapp/49df89c5520d9310c838eadcf2d054ce123db3e4/server/app.js';
+import { configure } from 'https://raw.githubusercontent.com/laminedo/medicapp/49df89c5520d9310c838eadcf2d054ce123db3e4/server/config.js';
+import { useDatabase } from 'https://raw.githubusercontent.com/laminedo/medicapp/49df89c5520d9310c838eadcf2d054ce123db3e4/server/db.js';
+import { MAX_BODY_BYTES } from 'https://raw.githubusercontent.com/laminedo/medicapp/49df89c5520d9310c838eadcf2d054ce123db3e4/server/router.js';
+import { postgresEngine } from 'https://raw.githubusercontent.com/laminedo/medicapp/49df89c5520d9310c838eadcf2d054ce123db3e4/supabase/functions/api/db-postgres.js';
 
 // The web addresses allowed to call this API from a browser: where the pages
 // are published. The phone app is not a browser and is not affected by this.
