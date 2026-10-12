@@ -1,6 +1,7 @@
 // Medication tasks are computed, not stored: a day's list is every scheduled
 // dose that was in force that day, matched against what was recorded for it.
 import { all } from './db.js';
+import { zonedTime } from './time.js';
 
 // Minutes relative to the scheduled time. Change these to tune the round.
 export const DUE_OPENS_BEFORE_MIN = 60; // staff may record a dose this early
@@ -19,21 +20,6 @@ export const THRESHOLDS = {
 export const OUTCOMES = ['given', 'refused', 'held'];
 
 const HOUR_MS = 60 * 60 * 1000;
-const pad = (n) => String(n).padStart(2, '0');
-
-// Dates and times of day are in the facility's local time, which is the
-// server's local time.
-export function localDate(d = new Date()) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-export function shiftDate(date, days) {
-  const d = new Date(`${date}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  return localDate(d);
-}
-
-export const scheduledAt = (date, time) => new Date(`${date}T${time}:00`);
 
 export function parseTimes(json) {
   try {
@@ -70,14 +56,16 @@ const presentVoided = (r) => ({
   void_reason: r.void_reason,
 });
 
-export function buildTasks(date, at = new Date()) {
-  const meds = all(
+// `timeZone` is the facility's: a dose scheduled for 08:00 is due when the
+// clocks there read 08:00, wherever the server is.
+export async function buildTasks(timeZone, date, at = new Date()) {
+  const meds = await all(
     `SELECT m.id, m.patient_id, m.name, m.dosage, m.instructions, m.times, m.created_at, m.ended_at,
             p.name AS patient_name, p.room, p.notes AS patient_notes, p.archived_at
        FROM medications m JOIN patients p ON p.id = m.patient_id
       WHERE m.prn = 0`,
   );
-  const records = all(`SELECT ${RECORD_COLUMNS} ${RECORD_JOINS} WHERE a.scheduled_date = ? AND a.scheduled_time IS NOT NULL ORDER BY a.recorded_at`, date);
+  const records = await all(`SELECT ${RECORD_COLUMNS} ${RECORD_JOINS} WHERE a.scheduled_date = ? AND a.scheduled_time IS NOT NULL ORDER BY a.recorded_at`, date);
   const liveByKey = new Map();
   const voidedByKey = new Map();
   for (const record of records) {
@@ -89,7 +77,7 @@ export function buildTasks(date, at = new Date()) {
 
   for (const med of meds) {
     for (const time of parseTimes(med.times)) {
-      const when = scheduledAt(date, time);
+      const when = zonedTime(timeZone, date, time);
       const iso = when.toISOString();
       const key = `${med.id}|${time}`;
       const record = liveByKey.get(key);
@@ -140,9 +128,9 @@ export function countTasks(tasks) {
 // ---- as-needed (PRN) medications ------------------------------------------
 
 // Where an as-needed medication stands against its own limits right now.
-export function prnStanding(med, at = new Date()) {
+export async function prnStanding(med, at = new Date()) {
   const dayAgo = new Date(at.getTime() - 24 * HOUR_MS).toISOString();
-  const recent = all(
+  const recent = await all(
     `SELECT a.recorded_at, u.name AS recorded_by_name
        FROM administrations a JOIN users u ON u.id = a.recorded_by
       WHERE a.medication_id = ? AND a.voided_at IS NULL AND a.outcome = 'given' AND a.recorded_at >= ?
@@ -164,15 +152,16 @@ export function prnStanding(med, at = new Date()) {
 }
 
 // Every as-needed medication currently prescribed, with its standing.
-export function buildPrn(at = new Date()) {
-  const meds = all(
+export async function buildPrn(at = new Date()) {
+  const meds = await all(
     `SELECT m.id, m.patient_id, m.name, m.dosage, m.instructions, m.prn_min_hours, m.prn_max_daily,
             p.name AS patient_name, p.room, p.notes AS patient_notes
        FROM medications m JOIN patients p ON p.id = m.patient_id
       WHERE m.prn = 1 AND m.active = 1 AND p.active = 1`,
   );
   meds.sort((a, b) => a.room.localeCompare(b.room, undefined, { numeric: true }) || a.name.localeCompare(b.name));
-  return meds.map((med) => ({
+  const standings = await Promise.all(meds.map((med) => prnStanding(med, at)));
+  return meds.map((med, index) => ({
     medication_id: med.id,
     patient_id: med.patient_id,
     patient_name: med.patient_name,
@@ -183,7 +172,7 @@ export function buildPrn(at = new Date()) {
     instructions: med.instructions,
     min_hours: med.prn_min_hours,
     max_daily: med.prn_max_daily,
-    ...prnStanding(med, at),
+    ...standings[index],
   }));
 }
 

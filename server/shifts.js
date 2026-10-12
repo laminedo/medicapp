@@ -1,31 +1,29 @@
 // Pairs clock-ins with the clock-outs that follow them, to give worked shifts.
 import { all } from './db.js';
-
-const startOfDay = (date) => new Date(`${date}T00:00:00`).toISOString();
-const endOfDay = (date) => new Date(`${date}T23:59:59.999`).toISOString();
+import { endOfDay, startOfDay } from './time.js';
 
 // Shifts that STARTED between `from` and `to` (local dates, inclusive). A shift
 // still open has no clock-out and is never counted towards the totals.
-export function buildShifts({ from, to, userId = null, at = new Date() }) {
-  const params = [startOfDay(from)];
+export async function buildShifts({ timeZone, from, to, userId = null, at = new Date() }) {
+  const params = [startOfDay(timeZone, from).toISOString()];
   let userFilter = '';
   if (userId) {
     userFilter = 'AND e.user_id = ?';
     params.push(userId);
   }
   // No upper bound on purpose: a shift that started in range may end after it.
-  const events = all(
-    `SELECT e.id, e.user_id, e.type, e.at, e.on_site, e.forced_by, e.note,
+  const events = await all(
+    `SELECT e.id, e.user_id, e.type, e."at", e.on_site, e.forced_by, e.note,
             u.name AS user_name, u.job_title, f.name AS forced_by_name
        FROM clock_events e
        JOIN users u ON u.id = e.user_id
        LEFT JOIN users f ON f.id = e.forced_by
-      WHERE e.status = 'ok' AND e.at >= ? ${userFilter}
-      ORDER BY e.user_id, e.at, e.id`,
+      WHERE e.status = 'ok' AND e."at" >= ? ${userFilter}
+      ORDER BY e.user_id, e."at", e.id`,
     ...params,
   );
 
-  const until = endOfDay(to);
+  const until = endOfDay(timeZone, to).toISOString();
   const shifts = [];
   let open = null;
   const close = (out) => {

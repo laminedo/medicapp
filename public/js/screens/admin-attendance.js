@@ -3,7 +3,7 @@ import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { eventBadge, isForced, openForceClockOut } from '../clock.js';
 import { fmtCoords, fmtDistance, fmtHours, fmtShortDay, fmtTime, localDate, plural, shiftDate } from '../format.js';
-import { avatar, badge, button, dataView, empty, field, group, input, pageHead, row, section, segmented, select } from '../ui.js';
+import { avatar, badge, button, dataView, empty, field, group, input, pageHead, row, section, segmented, select, toast, withBusy } from '../ui.js';
 
 const mapUrl = (e) => `https://www.openstreetmap.org/?mlat=${e.latitude}&mlon=${e.longitude}#map=18/${e.latitude}/${e.longitude}`;
 
@@ -64,7 +64,10 @@ export function mount(root) {
     if (shifts.length === 0) {
       return empty({ icon: 'clock', title: 'No shifts in these dates', text: 'A shift appears once someone has clocked in. Widen the dates to see more.' });
     }
-    const download = h('a', { class: 'btn btn--secondary btn--md', href: `/api/reports/hours.csv?${query(['user_id', 'from', 'to'])}`, download: '' }, icon('external', 18), h('span', { class: 'btn-label' }, 'Download CSV'));
+    const download = button('Download CSV', {
+      icon: 'external',
+      onClick: () => withBusy(download, () => api.download(`/api/reports/hours.csv?${query(['user_id', 'from', 'to'])}`, 'hours.csv').catch((err) => toast(err.message, 'danger'))),
+    });
 
     const totals = group(
       people.map((p) =>

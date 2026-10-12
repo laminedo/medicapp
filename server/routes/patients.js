@@ -34,11 +34,11 @@ function readMedication(body) {
 }
 
 function insertMedication(patientId, med, at) {
-  return run(
+  return get(
     `INSERT INTO medications (patient_id, name, dosage, instructions, times, prn, prn_min_hours, prn_max_daily, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
     patientId, med.name, med.dosage, med.instructions, JSON.stringify(med.times), med.prn, med.prn_min_hours, med.prn_max_daily, at,
-  ).lastInsertRowid;
+  );
 }
 
 function readPatient(body) {
@@ -61,68 +61,70 @@ const presentMed = (m) => ({
   prn_max_daily: m.prn_max_daily,
 });
 
-function activeMeds(patientId) {
-  return all('SELECT * FROM medications WHERE patient_id = ? AND active = 1 ORDER BY prn, name COLLATE NOCASE', patientId).map(presentMed);
+async function activeMeds(patientId) {
+  return (await all('SELECT * FROM medications WHERE patient_id = ? AND active = 1 ORDER BY prn, lower(name)', patientId)).map(presentMed);
 }
 
-function findPatient(id) {
-  const patient = get('SELECT id, name, room, notes, created_at FROM patients WHERE id = ? AND active = 1', id);
+async function findPatient(id) {
+  const patient = await get('SELECT id, name, room, notes, created_at FROM patients WHERE id = ? AND active = 1', id);
   if (!patient) throw new HttpError(404, 'That patient is no longer on the list.');
   return patient;
 }
 
-function findMedication(id) {
-  const med = get('SELECT * FROM medications WHERE id = ? AND active = 1', id);
+async function findMedication(id) {
+  const med = await get('SELECT * FROM medications WHERE id = ? AND active = 1', id);
   if (!med) throw new HttpError(404, 'That medication is no longer on the schedule.');
   return med;
 }
 
+const withMeds = async (patient) => ({ ...patient, medications: await activeMeds(patient.id) });
+
 export default function patientRoutes(router) {
-  router.get('/api/patients', { role: 'admin' }, () => {
-    const patients = all('SELECT id, name, room, notes, created_at FROM patients WHERE active = 1');
+  router.get('/api/patients', { role: 'admin' }, async () => {
+    const patients = await all('SELECT id, name, room, notes, created_at FROM patients WHERE active = 1');
     patients.sort((a, b) => a.room.localeCompare(b.room, undefined, { numeric: true }) || a.name.localeCompare(b.name));
-    return { patients: patients.map((p) => ({ ...p, medications: activeMeds(p.id) })) };
+    return { patients: await Promise.all(patients.map(withMeds)) };
   });
 
-  router.get('/api/patients/:id', { role: 'admin' }, ({ params }) => {
-    const patient = findPatient(params.id);
-    return { patient: { ...patient, medications: activeMeds(patient.id) } };
-  });
+  router.get('/api/patients/:id', { role: 'admin' }, async ({ params }) => ({ patient: await withMeds(await findPatient(params.id)) }));
 
-  router.post('/api/patients', { role: 'admin' }, (ctx) => {
+  router.post('/api/patients', { role: 'admin' }, async (ctx) => {
     const { name, room, notes } = readPatient(ctx.body);
-    const { lastInsertRowid } = run('INSERT INTO patients (name, room, notes, created_at) VALUES (?, ?, ?, ?)', name, room, notes, now());
+    const patient = await get(
+      'INSERT INTO patients (name, room, notes, created_at) VALUES (?, ?, ?, ?) RETURNING id, name, room, notes, created_at',
+      name, room, notes, now(),
+    );
     ctx.status = 201;
-    return { patient: { ...findPatient(lastInsertRowid), medications: [] } };
+    return { patient: { ...patient, medications: [] } };
   });
 
-  router.put('/api/patients/:id', { role: 'admin' }, ({ params, body }) => {
-    const patient = findPatient(params.id);
+  router.put('/api/patients/:id', { role: 'admin' }, async ({ params, body }) => {
+    const patient = await findPatient(params.id);
     const { name, room, notes } = readPatient(body);
-    run('UPDATE patients SET name = ?, room = ?, notes = ? WHERE id = ?', name, room, notes, patient.id);
-    return { patient: { ...findPatient(patient.id), medications: activeMeds(patient.id) } };
+    await run('UPDATE patients SET name = ?, room = ?, notes = ? WHERE id = ?', name, room, notes, patient.id);
+    return { patient: await withMeds(await findPatient(patient.id)) };
   });
 
   // Archives rather than deletes: the medication history stays on record.
-  router.delete('/api/patients/:id', { role: 'admin' }, ({ params }) => {
-    const patient = findPatient(params.id);
+  router.delete('/api/patients/:id', { role: 'admin' }, async ({ params }) => {
+    const patient = await findPatient(params.id);
     const at = now();
-    tx(() => {
-      run('UPDATE medications SET active = 0, ended_at = ? WHERE patient_id = ? AND active = 1', at, patient.id);
-      run('UPDATE patients SET active = 0, archived_at = ? WHERE id = ?', at, patient.id);
+    await tx(async () => {
+      await run('UPDATE medications SET active = 0, ended_at = ? WHERE patient_id = ? AND active = 1', at, patient.id);
+      await run('UPDATE patients SET active = 0, archived_at = ? WHERE id = ?', at, patient.id);
     });
     return { ok: true };
   });
 
-  router.post('/api/patients/:id/medications', { role: 'admin' }, (ctx) => {
-    const patient = findPatient(ctx.params.id);
-    const id = insertMedication(patient.id, readMedication(ctx.body), now());
+  router.post('/api/patients/:id/medications', { role: 'admin' }, async (ctx) => {
+    const patient = await findPatient(ctx.params.id);
+    const medication = await insertMedication(patient.id, readMedication(ctx.body), now());
     ctx.status = 201;
-    return { medication: presentMed(get('SELECT * FROM medications WHERE id = ?', id)) };
+    return { medication: presentMed(medication) };
   });
 
-  router.put('/api/medications/:id', { role: 'admin' }, ({ params, body }) => {
-    const existing = findMedication(params.id);
+  router.put('/api/medications/:id', { role: 'admin' }, async ({ params, body }) => {
+    const existing = await findMedication(params.id);
     const med = readMedication(body);
     const sameSchedule =
       med.name === existing.name &&
@@ -133,21 +135,21 @@ export default function patientRoutes(router) {
       med.prn_max_daily === existing.prn_max_daily;
 
     if (sameSchedule) {
-      run('UPDATE medications SET instructions = ? WHERE id = ?', med.instructions, existing.id);
-      return { medication: presentMed(get('SELECT * FROM medications WHERE id = ?', existing.id)) };
+      await run('UPDATE medications SET instructions = ? WHERE id = ?', med.instructions, existing.id);
+      return { medication: presentMed({ ...existing, instructions: med.instructions }) };
     }
     // The prescription itself changed: close this version and open a new one.
     const at = now();
-    const id = tx(() => {
-      run('UPDATE medications SET active = 0, ended_at = ? WHERE id = ?', at, existing.id);
+    const replacement = await tx(async () => {
+      await run('UPDATE medications SET active = 0, ended_at = ? WHERE id = ?', at, existing.id);
       return insertMedication(existing.patient_id, med, at);
     });
-    return { medication: presentMed(get('SELECT * FROM medications WHERE id = ?', id)) };
+    return { medication: presentMed(replacement) };
   });
 
-  router.delete('/api/medications/:id', { role: 'admin' }, ({ params }) => {
-    const existing = findMedication(params.id);
-    run('UPDATE medications SET active = 0, ended_at = ? WHERE id = ?', now(), existing.id);
+  router.delete('/api/medications/:id', { role: 'admin' }, async ({ params }) => {
+    const existing = await findMedication(params.id);
+    await run('UPDATE medications SET active = 0, ended_at = ? WHERE id = ?', now(), existing.id);
     return { ok: true };
   });
 }

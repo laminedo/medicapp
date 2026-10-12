@@ -1,4 +1,10 @@
 // A small router: path patterns, JSON bodies, role guards, and one error shape.
+// It works on plain request and response objects, so the same routes run under
+// Node's http server and as a Supabase function.
+//
+//   request:  { method, path, query, headers, body, ip, secure }
+//   response: { status, headers, body }
+import { config } from './config.js';
 
 export class HttpError extends Error {
   constructor(status, message, extra = {}) {
@@ -8,33 +14,22 @@ export class HttpError extends Error {
   }
 }
 
-const MAX_BODY_BYTES = 64 * 1024;
+export const MAX_BODY_BYTES = 64 * 1024;
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-export function sendJson(res, status, body) {
-  const payload = JSON.stringify(body);
-  res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(payload),
-    'Cache-Control': 'no-store',
-  });
-  res.end(payload);
-}
+export const json = (status, body, headers = {}) => ({
+  status,
+  headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers },
+  body: JSON.stringify(body),
+});
 
-async function readJson(req) {
-  const type = (req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+function parseBody(request) {
+  const type = (request.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
   if (type !== 'application/json') throw new HttpError(415, 'Requests must be sent as JSON.');
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > MAX_BODY_BYTES) throw new HttpError(413, 'That request is too large.');
-    chunks.push(chunk);
-  }
-  if (size === 0) return {};
+  if (!request.body) return {};
   let value;
   try {
-    value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    value = JSON.parse(request.body);
   } catch {
     throw new HttpError(400, 'The request body is not valid JSON.');
   }
@@ -44,10 +39,11 @@ async function readJson(req) {
   return value;
 }
 
-// The session cookie is SameSite=Strict; this is a second check that a
-// state-changing request really came from our own pages.
-function assertSameOrigin(req) {
-  const origin = req.headers.origin;
+// A browser says which page a request came from. Changes are accepted only
+// from this server's own pages, or from an address listed in allowedOrigins
+// (the GitHub Pages site). Apps that are not browsers send no Origin at all.
+function assertAllowedOrigin(request) {
+  const origin = request.headers.origin;
   if (!origin) return;
   let host;
   try {
@@ -55,7 +51,8 @@ function assertSameOrigin(req) {
   } catch {
     throw new HttpError(403, 'Cross-site requests are not allowed.');
   }
-  if (host !== req.headers.host) throw new HttpError(403, 'Cross-site requests are not allowed.');
+  if (host === request.headers.host || config.allowedOrigins.includes(origin)) return;
+  throw new HttpError(403, 'Cross-site requests are not allowed.');
 }
 
 export function createRouter({ authenticate }) {
@@ -72,15 +69,16 @@ export function createRouter({ authenticate }) {
     routes.push({ method, regex: new RegExp(`^${source}/?$`), keys, role: opts.role || 'any', handler });
   }
 
-  async function dispatch(req, res, url) {
-    const matching = routes.filter((r) => r.regex.test(url.pathname));
+  async function dispatch(request) {
+    const matching = routes.filter((r) => r.regex.test(request.path));
     if (matching.length === 0) throw new HttpError(404, 'Not found.');
-    const route = matching.find((r) => r.method === req.method);
+    const route = matching.find((r) => r.method === request.method);
     if (!route) throw new HttpError(405, 'Method not allowed.');
 
-    if (MUTATING.has(req.method)) assertSameOrigin(req);
+    const mutating = MUTATING.has(request.method);
+    if (mutating) assertAllowedOrigin(request);
 
-    const user = authenticate(req);
+    const user = await authenticate(request.headers);
     if (route.role !== 'public') {
       if (!user) throw new HttpError(401, 'Please sign in to continue.');
       if (route.role !== 'any' && user.role !== route.role) {
@@ -88,34 +86,34 @@ export function createRouter({ authenticate }) {
       }
     }
 
-    const match = route.regex.exec(url.pathname);
+    const match = route.regex.exec(request.path);
     const params = {};
     route.keys.forEach((key, i) => (params[key] = Number(match[i + 1])));
 
+    const headers = {};
+    let raw = null;
     const ctx = {
-      req,
-      res,
+      request,
       user,
       params,
-      query: Object.fromEntries(url.searchParams),
-      body: MUTATING.has(req.method) ? await readJson(req) : {},
+      query: request.query,
+      body: mutating ? parseBody(request) : {},
       status: 200,
+      setHeader: (name, value) => (headers[name] = value),
+      // For the rare response that is not JSON (a CSV download).
+      raw: (status, rawHeaders, body) => (raw = { status, headers: rawHeaders, body }),
     };
     const result = await route.handler(ctx);
-    if (!res.writableEnded) sendJson(res, ctx.status, result ?? { ok: true });
+    return raw ?? json(ctx.status, result ?? { ok: true }, headers);
   }
 
-  async function handle(req, res, url) {
+  async function handle(request) {
     try {
-      await dispatch(req, res, url);
+      return await dispatch(request);
     } catch (err) {
-      if (res.writableEnded) return;
-      if (err instanceof HttpError) {
-        sendJson(res, err.status, { error: { message: err.message, ...err.extra } });
-      } else {
-        console.error(err);
-        sendJson(res, 500, { error: { message: 'Something went wrong on the server.' } });
-      }
+      if (err instanceof HttpError) return json(err.status, { error: { message: err.message, ...err.extra } });
+      console.error(err);
+      return json(500, { error: { message: 'Something went wrong on the server.' } });
     }
   }
 
@@ -153,7 +151,7 @@ export function oneOf(value, label, options) {
 }
 
 export function isoDate(value, label) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00`))) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
     throw new HttpError(400, `${label} must be a date like 2026-01-31.`);
   }
   return value;

@@ -1,22 +1,15 @@
+// Running the server under Node: an http server for the API and the web
+// app's files, with SQLite for storage.
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { createApp } from './app.js';
+import { config } from './config.js';
+import { get, useDatabase } from './db.js';
+import { sqlite } from './db-sqlite.js';
 import { PUBLIC_DIR } from './paths.js';
-import { authenticate } from './auth.js';
-import { createRouter, sendJson } from './router.js';
+import { MAX_BODY_BYTES, json } from './router.js';
 import { seedIfEmpty } from './seed.js';
-import authRoutes from './routes/auth.js';
-import userRoutes from './routes/users.js';
-import facilityRoutes from './routes/facility.js';
-import clockRoutes from './routes/clock.js';
-import patientRoutes from './routes/patients.js';
-import taskRoutes from './routes/tasks.js';
-import messageRoutes from './routes/messages.js';
-import dashboardRoutes from './routes/dashboard.js';
-import reportRoutes from './routes/reports.js';
-import setupRoutes from './routes/setup.js';
-import { DEMO_DATA, PERSISTENT_STORAGE, PRODUCTION, SETUP_CODE } from './config.js';
-import { get } from './db.js';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -41,12 +34,35 @@ const SECURITY_HEADERS = {
     "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
 };
 
-const router = createRouter({ authenticate });
-for (const mount of [authRoutes, setupRoutes, userRoutes, facilityRoutes, clockRoutes, patientRoutes, taskRoutes, messageRoutes, dashboardRoutes, reportRoutes]) {
-  mount(router);
+useDatabase(sqlite);
+const app = createApp();
+
+// Reads the request into the plain shape the router works on.
+async function readRequest(req, url) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > MAX_BODY_BYTES) return null;
+    chunks.push(chunk);
+  }
+  return {
+    method: req.method,
+    path: url.pathname,
+    query: Object.fromEntries(url.searchParams),
+    headers: req.headers,
+    body: size ? Buffer.concat(chunks).toString('utf8') : null,
+    ip: req.socket.remoteAddress,
+    secure: Boolean(req.socket.encrypted) || req.headers['x-forwarded-proto'] === 'https',
+  };
 }
-// For the host's health check: answers as soon as the server can serve requests.
-router.get('/api/health', { role: 'public' }, () => ({ ok: true }));
+
+async function serveApi(req, res, url) {
+  const request = await readRequest(req, url);
+  const response = request ? await app.handle(request) : json(413, { error: { message: 'That request is too large.' } });
+  res.writeHead(response.status, { ...response.headers, 'Content-Length': Buffer.byteLength(response.body) });
+  res.end(response.body);
+}
 
 async function serveStatic(req, res, url) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -90,21 +106,21 @@ const server = http.createServer(async (req, res) => {
   if (req.headers['x-forwarded-proto'] === 'https') res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   const url = new URL(req.url, 'http://localhost');
   try {
-    if (url.pathname.startsWith('/api/')) await router.handle(req, res, url);
+    if (url.pathname.startsWith('/api/')) await serveApi(req, res, url);
     else await serveStatic(req, res, url);
   } catch (err) {
     console.error(err);
-    if (!res.headersSent) sendJson(res, 500, { error: { message: 'Something went wrong on the server.' } });
-    else res.end();
+    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: { message: 'Something went wrong on the server.' } }));
   }
 });
 
-if (DEMO_DATA) {
+if (config.demoData) {
   if (await seedIfEmpty()) console.log('First run: added sample data. Demo sign-ins are listed in README.md.');
-} else if (get('SELECT COUNT(*) AS n FROM users').n === 0) {
+} else if ((await get('SELECT CAST(COUNT(*) AS INTEGER) AS n FROM users')).n === 0) {
   console.log('No accounts yet. Open the app in a browser to create the first admin account.');
-  if (PRODUCTION && !PERSISTENT_STORAGE) console.warn('WARNING: no persistent disk is attached. Setup is blocked until a volume is mounted, or the data would be lost at the next deploy.');
-  if (PRODUCTION && !SETUP_CODE) console.warn('WARNING: MEDICAPP_SETUP_CODE is not set. Setup is blocked until it is.');
+  if (config.production && !config.persistentStorage) console.warn('WARNING: no persistent disk is attached. Setup is blocked until a volume is mounted, or the data would be lost at the next deploy.');
+  if (config.production && !config.setupCode) console.warn('WARNING: MEDICAPP_SETUP_CODE is not set. Setup is blocked until it is.');
 }
 
 server.listen(PORT, HOST, () => {

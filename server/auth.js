@@ -1,4 +1,7 @@
-// Passwords (scrypt) and cookie sessions.
+// Passwords (scrypt) and sessions. A browser on the server's own address
+// carries its session in an HttpOnly cookie; the phone app and the separately
+// hosted pages send the same token as a Bearer header instead.
+import { Buffer } from 'node:buffer';
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { get, now, run } from './db.js';
 
@@ -20,31 +23,20 @@ export function verifyPassword(password, stored) {
   return timingSafeEqual(actual, expected);
 }
 
-// Only a hash of the session token is stored, so a copy of the database
-// cannot be replayed as a login.
-const tokenHash = (token) => createHash('sha256').update(token).digest('hex');
+// Only a hash of a secret is ever stored, so a copy of the database cannot be
+// replayed as a login.
+export const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
-export function createSession(userId) {
+export async function createSession(userId) {
   const token = randomBytes(32).toString('base64url');
   const expires = new Date(Date.now() + SESSION_HOURS * 3600 * 1000).toISOString();
-  run('DELETE FROM sessions WHERE expires_at < ?', now());
-  run('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)', tokenHash(token), userId, now(), expires);
+  await run('DELETE FROM sessions WHERE expires_at < ?', now());
+  await run('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)', sha256(token), userId, now(), expires);
   return token;
 }
 
-export function destroySession(req) {
-  const token = readToken(req);
-  if (token) run('DELETE FROM sessions WHERE token_hash = ?', tokenHash(token));
-}
-
-export function destroyUserSessions(userId, exceptReq = null) {
-  const keep = exceptReq ? readToken(exceptReq) : null;
-  if (keep) run('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?', userId, tokenHash(keep));
-  else run('DELETE FROM sessions WHERE user_id = ?', userId);
-}
-
-function readCookie(req) {
-  const header = req.headers.cookie;
+function readCookie(headers) {
+  const header = headers.cookie;
   if (!header) return null;
   for (const part of header.split(';')) {
     const [name, ...rest] = part.trim().split('=');
@@ -53,36 +45,39 @@ function readCookie(req) {
   return null;
 }
 
-// Browsers carry the session in a cookie. The phone app has no cookie jar it
-// can trust across restarts, so it sends the same token as a Bearer header.
-function readToken(req) {
-  const header = req.headers.authorization;
+function readToken(headers) {
+  const header = headers.authorization;
   if (header?.startsWith('Bearer ')) return header.slice(7).trim() || null;
-  return readCookie(req);
+  return readCookie(headers);
 }
 
-function isHttps(req) {
-  return Boolean(req.socket.encrypted) || req.headers['x-forwarded-proto'] === 'https';
+export async function destroySession(headers) {
+  const token = readToken(headers);
+  if (token) await run('DELETE FROM sessions WHERE token_hash = ?', sha256(token));
 }
 
-export function sessionCookie(req, token) {
-  const secure = isHttps(req) ? '; Secure' : '';
-  return `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_HOURS * 3600}${secure}`;
+export async function destroyUserSessions(userId, exceptHeaders = null) {
+  const keep = exceptHeaders ? readToken(exceptHeaders) : null;
+  if (keep) await run('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?', userId, sha256(keep));
+  else await run('DELETE FROM sessions WHERE user_id = ?', userId);
 }
 
-export function clearedCookie(req) {
-  const secure = isHttps(req) ? '; Secure' : '';
-  return `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure}`;
+export function sessionCookie(secure, token) {
+  return `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_HOURS * 3600}${secure ? '; Secure' : ''}`;
 }
 
-export function authenticate(req) {
-  const token = readToken(req);
+export function clearedCookie(secure) {
+  return `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
+}
+
+export async function authenticate(headers) {
+  const token = readToken(headers);
   if (!token) return null;
-  const user = get(
+  const user = await get(
     `SELECT u.id, u.username, u.name, u.role, u.job_title, u.created_at
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = ? AND s.expires_at > ? AND u.active = 1`,
-    tokenHash(token),
+    sha256(token),
     now(),
   );
   return user || null;
@@ -90,26 +85,41 @@ export function authenticate(req) {
 
 export const publicUser = (u) => ({ id: u.id, username: u.username, name: u.name, role: u.role, job_title: u.job_title });
 
-// ---- sign-in throttling ----------------------------------------------------
+// Starting a session answers with a cookie, or with the token itself for a
+// caller that asked for it (the phone app, or pages hosted somewhere else).
+export async function startSession(ctx, user) {
+  const token = await createSession(user.id);
+  const client = ctx.body.client;
+  if (client === 'native' || client === 'token') return { user: publicUser(user), token };
+  ctx.setHeader('Set-Cookie', sessionCookie(ctx.request.secure, token));
+  return { user: publicUser(user) };
+}
+
+// ---- throttling: sign-in and setup-code attempts ---------------------------
+// Kept in the database, because a hosted function has no memory between calls.
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = 8;
-const attempts = new Map();
 
-export function loginAllowed(key) {
-  const entry = attempts.get(key);
-  if (!entry) return true;
-  if (Date.now() - entry.first > WINDOW_MS) {
-    attempts.delete(key);
-    return true;
+const current = async (key) => {
+  const row = await get('SELECT first_at, attempts FROM login_attempts WHERE key = ?', key);
+  return row && Date.now() - Date.parse(row.first_at) <= WINDOW_MS ? row : null;
+};
+
+export async function loginAllowed(key) {
+  const row = await current(key);
+  return !row || row.attempts < MAX_ATTEMPTS;
+}
+
+export async function recordLoginFailure(key) {
+  if (await current(key)) {
+    await run('UPDATE login_attempts SET attempts = attempts + 1 WHERE key = ?', key);
+  } else {
+    await run(
+      'INSERT INTO login_attempts (key, first_at, attempts) VALUES (?, ?, 1) ON CONFLICT (key) DO UPDATE SET first_at = excluded.first_at, attempts = 1',
+      key, now(),
+    );
   }
-  return entry.count < MAX_ATTEMPTS;
 }
 
-export function recordLoginFailure(key) {
-  const entry = attempts.get(key);
-  if (!entry || Date.now() - entry.first > WINDOW_MS) attempts.set(key, { first: Date.now(), count: 1 });
-  else entry.count += 1;
-}
-
-export const clearLoginFailures = (key) => attempts.delete(key);
+export const clearLoginFailures = (key) => run('DELETE FROM login_attempts WHERE key = ?', key);

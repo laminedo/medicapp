@@ -5,3 +5,6 @@ data/
 .env
 .env.*
 !.env.example
+
+# One-time secrets kept on this machine only
+*.local.txt
