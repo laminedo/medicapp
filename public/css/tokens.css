@@ -1,0 +1,133 @@
+/* ============================================================================
+   The theme. Every colour, size, radius, shadow and duration in the app comes
+   from here. To rebrand, change the six colour roles; the rest is derived.
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  /* --- colour roles: six, with one accent ------------------------------- */
+  --canvas:     #F2F1EA;   /* the page ground                              */
+  --surface:    #FBFAF6;   /* anything raised off the ground               */
+  --ink:        #17221C;   /* primary text. Off-black, tinted to the hue.  */
+  --ink-soft:   #536058;   /* secondary text. Tinted, never flat grey.     */
+  --accent:     #1D5A44;   /* forest. Primary actions and "done".          */
+  --accent-ink: #F4F3EC;   /* text that sits on the accent                 */
+
+  /* --- derived from the roles ------------------------------------------- */
+  --field:           #FFFEFB;
+  --fill:            color-mix(in oklab, var(--ink) 7%, transparent);
+  --fill-strong:     color-mix(in oklab, var(--ink) 12%, transparent);
+  --hairline:        color-mix(in oklab, var(--ink) 11%, transparent);
+  --hairline-strong: color-mix(in oklab, var(--ink) 24%, transparent);
+  --accent-wash:     color-mix(in oklab, var(--accent) 11%, var(--surface));
+  --accent-hover:    color-mix(in oklab, var(--accent) 88%, var(--ink));
+  --scrim:           hsl(150 30% 8% / 0.46);
+
+  /* --- status. Forest means done, amber needs attention, brick is late. -- */
+  --warn:         #7E520A;
+  --warn-wash:    #F5E7C4;
+  --warn-solid:   #C78A12;
+  --danger:       #9F3626;
+  --danger-wash:  #F6DDD5;
+  --danger-solid: #A63C2B;
+  --danger-ink:   #FFF6F2;
+
+  /* --- the rail: the one region the accent owns ------------------------- */
+  --rail:          #143B2D;
+  --rail-ink:      #EDF0E7;
+  --rail-ink-soft: #A5BAAD;
+  --rail-fill:     rgb(255 255 255 / 0.1);
+  --rail-hairline: rgb(255 255 255 / 0.12);
+  --rail-accent:   #8AD7B2;   /* the accent, lifted so it reads on the rail */
+
+  /* --- type. One family: the system face, set with care. ---------------- */
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --t-caption:  0.75rem;
+  --t-footnote: 0.8125rem;
+  --t-subhead:  0.875rem;
+  --t-body:     1rem;
+  --t-headline: 1.0625rem;
+  --t-title:    1.375rem;
+  --t-large:    clamp(1.75rem, 1.45rem + 1.4vw, 2.375rem);
+  --t-display:  clamp(2.75rem, 2.1rem + 3vw, 4rem);
+
+  /* Tracking tightens as size grows: optical correction, not decoration. */
+  --track-display: -0.04em;
+  --track-large:   -0.03em;
+  --track-title:   -0.018em;
+  --track-normal:  -0.006em;
+
+  --leading-tight: 1.06;
+  --leading-snug:  1.3;
+  --leading-body:  1.5;
+  --measure:       62ch;
+
+  /* --- space: 4px base ---------------------------------------------------- */
+  --s-1: 0.25rem;  --s-2: 0.5rem;  --s-3: 0.75rem;  --s-4: 1rem;
+  --s-5: 1.5rem;   --s-6: 2rem;    --s-7: 3rem;     --s-8: 4rem;
+  --gutter: clamp(1rem, 4vw, 3.5rem);
+
+  /* --- radius: one scale, held everywhere ------------------------------- */
+  --r-xs: 6px;  --r-sm: 8px;  --r-md: 12px;  --r-lg: 18px;  --r-xl: 24px;
+
+  /* --- elevation: three steps. Offset and blur, tinted to the canvas. ---- */
+  --shadow: 150 25% 10%;
+  --e1: 0 1px 1px hsl(var(--shadow) / 0.04), 0 2px 6px -1px hsl(var(--shadow) / 0.07);
+  --e2: 0 2px 4px hsl(var(--shadow) / 0.05), 0 10px 22px -6px hsl(var(--shadow) / 0.15);
+  --e3: 0 6px 12px hsl(var(--shadow) / 0.08), 0 28px 60px -14px hsl(var(--shadow) / 0.32);
+  --edge: inset 0 1px 0 rgb(255 255 255 / 0.75);          /* a lip catching light */
+  --edge-accent: inset 0 1px 0 rgb(255 255 255 / 0.16);
+
+  /* --- motion: small and fast. Never ease-in on UI. ---------------------- */
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --d-fast: 140ms;  --d-base: 220ms;  --d-slow: 360ms;
+
+  /* --- layout ------------------------------------------------------------- */
+  --rail-w: 264px;
+  --tabbar-h: 60px;
+  --topbar-h: 56px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas:     #0E1512;
+    --surface:    #171F1B;
+    --ink:        #E8ECE4;
+    --ink-soft:   #9DABA1;
+    --accent:     #7CD0A6;
+    --accent-ink: #0B1A13;
+
+    --field:        #101714;
+    --accent-wash:  color-mix(in oklab, var(--accent) 14%, var(--surface));
+    --accent-hover: color-mix(in oklab, var(--accent) 86%, white);
+    --scrim:        hsl(150 30% 3% / 0.66);
+
+    --warn:         #E8BC66;
+    --warn-wash:    #3A2D10;
+    --warn-solid:   #E0AE4C;
+    --danger:       #F29380;
+    --danger-wash:  #40201A;
+    --danger-solid: #D9604B;
+    --danger-ink:   #1B0A07;
+
+    --rail:          #0A100D;
+    --rail-ink:      #E8ECE4;
+    --rail-ink-soft: #93A298;
+    --rail-fill:     rgb(255 255 255 / 0.08);
+    --rail-hairline: rgb(255 255 255 / 0.08);
+
+    /* Light text on dark is compensated: a little more leading and tracking. */
+    --track-normal: 0em;
+    --leading-body: 1.56;
+
+    --shadow: 150 40% 2%;
+    --e1: 0 1px 2px hsl(var(--shadow) / 0.4);
+    --e2: 0 2px 4px hsl(var(--shadow) / 0.36), 0 10px 22px -6px hsl(var(--shadow) / 0.5);
+    --e3: 0 6px 12px hsl(var(--shadow) / 0.4), 0 28px 60px -14px hsl(var(--shadow) / 0.7);
+    --edge: inset 0 1px 0 rgb(255 255 255 / 0.05);
+    --edge-accent: inset 0 1px 0 rgb(255 255 255 / 0.3);
+  }
+}

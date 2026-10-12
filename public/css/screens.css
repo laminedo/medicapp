@@ -1,0 +1,322 @@
+/* Per-screen composition. Structure only: the look comes from components.css. */
+
+/* ----------------------------------------------------------------- login -- */
+
+.login {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  min-height: 100dvh;
+}
+.login-aside {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--s-7);
+  padding: var(--s-7);
+  overflow: hidden;
+  background: var(--rail);
+  color: var(--rail-ink);
+}
+.login-brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: var(--t-headline);
+  font-weight: 650;
+  letter-spacing: var(--track-title);
+}
+.login-aside-text { position: relative; }
+.login-facility {
+  max-width: 12ch;
+  font-size: var(--t-display);
+  font-weight: 700;
+  letter-spacing: var(--track-display);
+  line-height: var(--leading-tight);
+  text-wrap: balance;
+}
+.login-tagline { max-width: 30ch; margin-top: var(--s-4); color: var(--rail-ink-soft); font-size: var(--t-headline); line-height: 1.4; }
+
+/* The rings run off the panel edge: overlap does more for depth than a shadow. */
+.login-rings {
+  position: absolute;
+  top: 46%;
+  right: -34%;
+  width: min(128%, 820px);
+  max-width: none;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.login-ring { fill: none; stroke: var(--rail-ink); stroke-width: 1; opacity: 0.16; }
+.login-ring--0 { fill: rgb(255 255 255 / 0.04); opacity: 0.4; }
+.login-ring--1, .login-ring--3 { stroke-dasharray: 2 8; }
+.login-ring-dot { fill: var(--rail-ink); opacity: 0.55; }
+.login-ring-you { fill: var(--rail-accent); }
+
+.login-main { display: grid; place-items: center; padding: var(--s-6) var(--gutter); }
+.login-panel { display: grid; gap: var(--s-4); width: min(380px, 100%); }
+.login-panel h1 { font-size: var(--t-large); font-weight: 700; letter-spacing: var(--track-large); line-height: var(--leading-tight); }
+.login-lede { margin: calc(var(--s-2) * -1) 0 var(--s-2); color: var(--ink-soft); }
+
+@media (max-width: 860px) {
+  .login { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  .login-aside { gap: var(--s-6); padding: calc(var(--s-5) + env(safe-area-inset-top)) var(--s-5) var(--s-6); }
+  .login-facility { font-size: var(--t-large); letter-spacing: var(--track-large); } /* one rung down on a phone */
+  .login-tagline { font-size: var(--t-body); }
+  .login-rings { top: 38%; right: -72%; width: 150%; } /* pushed clear of the text block */
+  .login-main { place-items: start center; padding: var(--s-6) var(--s-5); }
+}
+
+/* ----------------------------------------------------------- staff: shift -- */
+
+.shift-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--s-6);
+  align-items: start;
+}
+.shift-side { display: grid; gap: var(--s-6); }
+.shift-side > .section { margin-top: 0; }
+
+.clock { display: grid; gap: var(--s-4); padding: var(--s-5); }
+.clock-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); }
+.clock-head { min-width: 0; }
+.clock-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--ink-soft);
+  font-size: var(--t-subhead);
+  font-weight: 650;
+}
+.clock-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hairline-strong); }
+.clock--on .clock-state { color: var(--accent); }
+.clock--on .clock-dot { background: var(--accent); box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 18%, transparent); }
+.clock-figure {
+  display: flex;
+  align-items: baseline;
+  gap: 0.2em;
+  margin-top: var(--s-2);
+  font-size: var(--t-display);
+  font-weight: 700;
+  letter-spacing: var(--track-display);
+  line-height: 1;
+  white-space: nowrap;
+}
+.clock-unit {
+  margin-left: 0.14em;
+  color: var(--ink-soft);
+  font-size: 0.38em;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.clock-sub { margin-top: var(--s-2); color: var(--ink-soft); }
+.clock-caption { color: var(--ink-soft); font-size: var(--t-subhead); }
+.clock-actions { display: grid; gap: var(--s-2); margin-top: var(--s-1); }
+.clock-hint { min-height: 1.4em; color: var(--ink-soft); font-size: var(--t-footnote); text-align: center; }
+.clock-hint:empty { display: none; }
+
+@media (max-width: 860px) {
+  .shift-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 460px) {
+  .clock-top { flex-direction: column; align-items: flex-start; }
+  .clock-top .ring { align-self: center; }
+}
+
+/* ------------------------------------------------------- the geofence ring -- */
+
+.ring { display: block; flex-shrink: 0; overflow: visible; }
+.ring-guide { fill: none; stroke: var(--hairline-strong); stroke-width: 1; stroke-dasharray: 2 6; }
+.ring-zone { fill: var(--accent-wash); stroke: var(--accent); stroke-width: 1.5; }
+.ring-cross { stroke: var(--hairline); stroke-width: 1; }
+.ring-label { fill: var(--ink-soft); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; }
+.ring-site-halo { fill: var(--surface); stroke: var(--hairline-strong); stroke-width: 1; }
+.ring-site { fill: var(--ink); }
+.ring-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2.5; }
+.ring-accuracy { fill: var(--accent); opacity: 0.16; }
+.ring-pulse { fill: none; stroke: var(--accent); stroke-width: 2; }
+
+/* Outside the zone: the zone goes quiet and the device turns brick. */
+.ring--outside .ring-zone { fill: var(--fill); stroke: var(--hairline-strong); }
+.ring--outside :is(.ring-dot, .ring-accuracy) { fill: var(--danger-solid); }
+
+.ring-you, .ring-pulse { transform-box: fill-box; transform-origin: center; }
+.ring-you { animation: ring-arrive var(--d-slow) var(--ease-out) both; }
+.ring-pulse { animation: ring-pulse 900ms var(--ease-out) 140ms both; }
+@keyframes ring-arrive { from { opacity: 0; transform: scale(0.6); } }
+@keyframes ring-pulse { from { opacity: 0.7; transform: scale(1); } to { opacity: 0; transform: scale(5); } }
+
+/* ---------------------------------------------------- medication task rows -- */
+
+.task {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  gap: var(--s-3);
+  align-items: start;
+  padding: var(--s-4);
+}
+.task-time time { display: block; font-weight: 700; letter-spacing: var(--track-title); line-height: var(--leading-snug); }
+.task-day { display: block; color: var(--ink-soft); font-size: var(--t-caption); }
+.task-body { display: grid; gap: 2px; min-width: 0; }
+.task-patient { font-weight: 650; line-height: var(--leading-snug); }
+.task-room { margin-left: var(--s-2); color: var(--ink-soft); font-size: var(--t-subhead); font-weight: 500; white-space: nowrap; }
+.task-med { font-size: var(--t-subhead); }
+.task-dose { margin-left: var(--s-2); color: var(--ink-soft); }
+.task-note { margin-top: 2px; color: var(--ink-soft); font-size: var(--t-footnote); line-height: 1.4; }
+.task-note--quote { font-style: italic; }
+.task-note--void { padding-left: var(--s-2); border-left: 1px solid var(--hairline-strong); }
+.task--voided :is(.task-patient, .task-med) { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--hairline-strong); }
+.task-prn { display: block; color: var(--ink-soft); font-size: var(--t-footnote); font-weight: 650; line-height: var(--leading-snug); }
+.task-action { display: flex; flex-direction: column; align-items: flex-end; gap: var(--s-2); }
+
+.task--given .task-time time, .task--refused .task-time time, .task--held .task-time time { color: var(--ink-soft); font-weight: 600; }
+.task--overdue .task-time time, .task--missed .task-time time { color: var(--danger); }
+
+@media (max-width: 520px) {
+  .task { grid-template-columns: 64px minmax(0, 1fr); }
+  .task-action { grid-column: 2; flex-direction: row; align-items: center; justify-content: space-between; }
+}
+
+/* --------------------------------------------------- admin: report toolbar -- */
+
+.toolbar { display: flex; align-items: center; gap: var(--s-2); }
+.section > .segmented { margin-bottom: var(--s-3); }
+
+/* ------------------------------------------------------- admin: attendance -- */
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-3);
+  margin-bottom: var(--s-5);
+}
+
+.filters--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tabs { margin-bottom: var(--s-4); }
+.row-figure { color: var(--ink); font-size: var(--t-headline); font-weight: 700; letter-spacing: var(--track-title); }
+.cell-muted { color: var(--ink-soft); }
+
+.table-wrap { overflow-x: auto; }
+.table th {
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-soft);
+  font-size: var(--t-caption);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.table td {
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--hairline);
+  font-size: var(--t-subhead);
+  vertical-align: top;
+}
+.table tbody tr:last-child td { border-bottom: 0; }
+.table .is-blocked td { background: color-mix(in oklab, var(--danger-wash) 50%, transparent); }
+.cell-strong { display: block; font-weight: 600; }
+.cell-sub { display: block; color: var(--ink-soft); font-size: var(--t-footnote); }
+
+@media (max-width: 760px) {
+  .filters, .filters--three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* The table becomes a list: time and result on the first line, the rest below. */
+  .table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .table, .table tbody { display: block; }
+  .table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px var(--s-3);
+    padding: var(--s-3) var(--s-4);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .table tbody tr:last-child { border-bottom: 0; }
+  .table td { padding: 0; border: 0; background: none !important; }
+  .table td:nth-child(1) { grid-area: 1 / 1; display: flex; align-items: baseline; gap: var(--s-2); }
+  .table td:nth-child(5) { grid-area: 1 / 2; }
+  .table td:nth-child(n + 2):nth-child(-n + 4) { grid-column: 1 / -1; }
+  .table tr.is-blocked { background: color-mix(in oklab, var(--danger-wash) 50%, transparent); }
+}
+
+/* --------------------------------------------------------- admin: patients -- */
+
+.room-tile {
+  display: grid;
+  place-items: center;
+  min-width: 46px;
+  height: 46px;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-sm);
+  background: var(--fill);
+  color: var(--ink);
+  font-size: var(--t-subhead);
+  font-weight: 700;
+}
+
+.med { display: flex; align-items: flex-start; gap: var(--s-3); padding: var(--s-4); }
+.med-body { display: grid; gap: var(--s-2); flex: 1; min-width: 0; }
+.med-name { font-weight: 650; }
+.med-dose { margin-left: var(--s-2); color: var(--ink-soft); font-weight: 400; }
+.med-note { color: var(--ink-soft); font-size: var(--t-subhead); }
+.med-actions { display: flex; gap: 2px; }
+
+.time-list { display: grid; gap: var(--s-2); }
+.time-line { display: flex; align-items: center; gap: var(--s-2); }
+.time-line .input { max-width: 190px; }
+
+@media (max-width: 520px) {
+  .row-count { display: none; }
+}
+
+/* --------------------------------------------------------- admin: settings -- */
+
+.geofence {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-6);
+  align-items: center;
+}
+.geofence-preview { display: grid; justify-items: center; gap: var(--s-3); width: 220px; text-align: center; }
+.geofence-caption { color: var(--ink-soft); font-size: var(--t-footnote); line-height: 1.4; }
+.field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+.radius-control { display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: var(--s-3); align-items: center; }
+.settings > .form-error { margin-top: var(--s-4); }
+
+@media (max-width: 760px) {
+  .geofence { grid-template-columns: minmax(0, 1fr); }
+  .geofence-preview { width: auto; }
+}
+
+/* ------------------------------------------------------- account, messages -- */
+
+.identity { display: flex; align-items: center; gap: var(--s-4); }
+.identity-name { font-size: var(--t-headline); font-weight: 650; }
+.identity-meta { color: var(--ink-soft); font-size: var(--t-subhead); }
+
+.message-body { display: grid; gap: var(--s-3); max-width: var(--measure); white-space: pre-line; }
+
+/* A reply thread: the reader's own replies sit on the right, in the accent wash. */
+.thread { display: grid; gap: var(--s-2); }
+.bubble {
+  justify-self: start;
+  max-width: 86%;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--fill);
+  font-size: var(--t-subhead);
+  line-height: 1.45;
+  white-space: pre-line;
+}
+.bubble--mine { justify-self: end; background: var(--accent-wash); }
+.bubble-meta { display: block; margin-top: 2px; color: var(--ink-soft); font-size: var(--t-caption); }
+.reply { display: grid; gap: var(--s-2); }
+.reply-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-2); align-items: end; }
+.reply-line .textarea { min-height: 44px; }
+
+.recipients { display: grid; gap: var(--s-4); }
+.recipient { display: grid; gap: var(--s-2); }
+.recipient + .recipient { padding-top: var(--s-4); border-top: 1px solid var(--hairline); }
+.recipient-head { display: flex; align-items: center; gap: var(--s-2); }
+.recipient-name { flex: 1; min-width: 0; font-weight: 600; }

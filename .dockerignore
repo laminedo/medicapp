@@ -1,0 +1,7 @@
+# Only package.json, server/ and public/ go into the image.
+.git
+.claude
+data
+mobile
+**/node_modules
+*.md

@@ -1,0 +1,16 @@
+{
+  "name": "medicapp",
+  "version": "0.1.0",
+  "description": "Nursing home staff app: geofenced clock-in, medication rounds, and staff messaging.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "reset": "node server/seed.js --reset",
+    "mobile": "npm --prefix mobile start"
+  }
+}
